@@ -2,4 +2,6 @@
   (:use :cl :usocket)
   (:export message
            connect disconnect
-           parse-message get-message send-message))
+           make-message parse-message
+           get-message send-message
+           prefix command parameters))

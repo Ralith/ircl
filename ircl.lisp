@@ -1,9 +1,18 @@
 (in-package :ircl)
 
+(defclass prefix ()
+  ((nick :initarg :nick :accessor nick)
+   (username :initarg :username :accessor username)
+   (host :initarg :host :accessor host)))
+
 (defclass message ()
   ((prefix :initarg :prefix :accessor prefix)
    (command :initarg :command :accessor command)
-   (parameters :initarg :parameters :accessor parameters)))
+   (parameters :initarg :parameters :accessor parameters
+               :initform nil)))
+
+(defun make-message (command parameters)
+  (make-instance 'message :command command :parameters parameters))
 
 (defun connect (host &key (port 6667) ssl)
   (if ssl
@@ -36,22 +45,42 @@
                         nil))
        ,output)))
 
+(defun parse-prefix (string)
+  (let ((point 0)
+        (result (make-instance 'prefix)))
+    (cond
+      ((position #\! string)
+       (setf (nick result) (parse-until string '("!") point))
+       (incf point)
+       (if (position #\@ string)
+           (progn
+             (setf (username result) (parse-until string '("@") point))
+             (setf (host result) (subseq string (1+ point))))
+           (setf (username result) (subseq string point))))
+      ((position #\@ string)
+       (setf (nick result) (parse-until string '("@") point))
+       (setf (host result) (subseq string (1+ point))))
+      (t
+       (setf (host result) string)))
+    result))
+
 (defun parse-message (message)
   (let ((point 0)
-        (prefix) (command) (parameters))
+        (result (make-instance 'message)))
     (when (char= #\: (aref message 0))
       (incf point)
-      (setf prefix (parse-until message '(" ") point))
+      (setf (prefix result) (parse-prefix (parse-until message '(" ") point)))
       (incf point))
-    (setf command (parse-until message '(" ") point))
+    (setf (command result) (parse-until message '(" ") point))
     (loop while point do
          (incf point)
          (if (char= #\: (aref message point))
              (progn
-               (push (subseq message (1+ point)) parameters)
+               (push (subseq message (1+ point)) (parameters result))
                (return))
-             (push (parse-until message '(" " nil) point) parameters)))
-    (make-instance 'message :prefix prefix :command command :parameters (nreverse parameters))))
+             (push (parse-until message '(" " nil) point) (parameters result))))
+    (setf (parameters result) (nreverse (parameters result)))
+    result))
 
 ;; Blocks until a complete message is available, then returns parsed form
 (defun get-message (socket &optional timeout)
@@ -76,7 +105,7 @@
                                (concatenate 'string " " x)))
                          params))
     (apply #'concatenate 'string
-           (if (and include-prefix (prefix message))
+           (if (and include-prefix (slot-boundp message 'prefix))
                (concatenate 'string ":" (prefix message) " ")
                "")
            (command message)
