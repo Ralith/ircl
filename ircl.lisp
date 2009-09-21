@@ -10,8 +10,8 @@
       (error "SSL support is TODO")
       (socket-connect host port)))
 
-(defun disconnect (connection)
-  (socket-close connection))
+(defun disconnect (socket)
+  (socket-close socket))
 
 ;; nil terminator is end-of-string
 (defun take-until (terminators string)
@@ -54,12 +54,12 @@
     (make-instance 'message :prefix prefix :command command :parameters (nreverse parameters))))
 
 ;; Blocks until a complete message is available, then returns parsed form
-(defun get-message (connection &optional timeout)
+(defun get-message (socket &optional timeout)
   (when (if timeout
-            (wait-for-input connection :timeout timeout)
-            (wait-for-input connection))
+            (wait-for-input socket :timeout timeout)
+            (wait-for-input socket))
     (let ((raw))
-      (setf raw (read-line (socket-stream connection)))
+      (setf raw (read-line (socket-stream socket)))
       (setf raw (subseq raw 0 (1- (length raw))))
       (parse-message raw))))
 
@@ -82,9 +82,9 @@
            (command message)
            params)))
 
-(defun send-message (connection message)
+(defun send-message (socket message)
   (write-string (message->string message nil)
-                (socket-stream connection)))
+                (socket-stream socket)))
 
-(defun send-raw (connection string)
-  (write-string string (socket-stream connection)))
+(defun send-raw (socket string)
+  (write-string string (socket-stream socket)))
