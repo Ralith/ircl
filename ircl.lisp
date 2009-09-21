@@ -55,7 +55,9 @@
 
 ;; Blocks until a complete message is available, then returns parsed form
 (defun get-message (connection)
-  (parse-message (read-line (socket-stream connection))))
+  (let ((raw (read-line (socket-stream connection))))
+    (setf raw (subseq raw 0 (1- (length raw))))
+    (parse-message raw)))
 
 (defun contains-space (string)
   (loop for i from 0 to (1- (length string)) do
