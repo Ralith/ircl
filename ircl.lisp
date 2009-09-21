@@ -5,8 +5,6 @@
    (command :initarg :command :accessor command)
    (parameters :initarg :parameters :accessor parameters)))
 
-(export )
-
 (defun connect (host &key (port 6667) ssl)
   (if ssl
       (error "SSL support is TODO")
@@ -39,7 +37,6 @@
        ,output)))
 
 (defun parse-message (message)
-  (declare (optimize (debug 3)))
   (let ((point 0)
         (prefix) (command) (parameters))
     (when (char= #\: (aref message 0))
