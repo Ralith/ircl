@@ -11,7 +11,7 @@
    (parameters :initarg :parameters :accessor parameters
                :initform nil)))
 
-(defun make-message (command parameters)
+(defun make-message (command &rest parameters)
   (make-instance 'message :command command :parameters parameters))
 
 (defun connect (host &key (port 6667) ssl)
@@ -92,28 +92,40 @@
       (setf raw (subseq raw 0 (1- (length raw))))
       (parse-message raw))))
 
-(defun contains-space (string)
-  (loop for i from 0 to (1- (length string)) do
-       (when (char= #\Space (aref string i))
-         (return t))))
+(defun prefix->string (prefix)
+  (let ((elems))
+    (when (slot-boundp prefix 'host)
+      (push (host prefix) elems))
+    (if (slot-boundp prefix 'username)
+        (progn (push "@" elems)
+               (push (username prefix) elems)
+               (when (slot-boundp prefix 'nick)
+                 (push "!" elems)
+                 (push (nick prefix) elems)))
+        (when (slot-boundp prefix 'nick)
+          (push "@" elems)
+          (push (nick prefix) elems)))
+    (apply #'concatenate 'string elems)))
 
 (defun message->string (message &optional (include-prefix t))
   (let ((params (copy-list (parameters message))))
     (setf params (mapcar (lambda (x)
-                           (if (contains-space x)
+                           (if (or (position #\Space x)
+                                   (char= #\: (aref x 0)))
                                (concatenate 'string " :" x)
                                (concatenate 'string " " x)))
                          params))
     (apply #'concatenate 'string
            (if (and include-prefix (slot-boundp message 'prefix))
-               (concatenate 'string ":" (prefix message) " ")
+               (concatenate 'string ":" (prefix->string (prefix message)) " ")
                "")
            (command message)
            params)))
 
 (defun send-message (socket message)
-  (write-string (message->string message nil)
-                (socket-stream socket)))
+  (send-raw socket (concatenate 'string (message->string message nil)))
+  (force-output (socket-stream socket)))
 
 (defun send-raw (socket string)
-  (write-string string (socket-stream socket)))
+  (format (socket-stream socket) "~a~a~a" string (code-char 13) (code-char 10))
+  (force-output (socket-stream socket)))
