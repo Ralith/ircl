@@ -3,4 +3,4 @@
   :depends-on (:usocket)
   :components
   ((:file "package")
-   (:file "ircl")))
+   (:file "ircl" :depends-on ("package"))))
