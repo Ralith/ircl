@@ -6,7 +6,8 @@
    (host :initarg :host :accessor host)))
 
 (defclass message ()
-  ((prefix :initarg :prefix :accessor prefix)
+  ((received :initarg :received :accessor received)
+   (prefix :initarg :prefix :accessor prefix)
    (command :initarg :command :accessor command)
    (parameters :initarg :parameters :accessor parameters
                :initform nil)))
@@ -72,7 +73,8 @@
       (setf (prefix result) (parse-prefix (parse-until message '(" ") point)))
       (incf point))
     (setf (command result) (parse-until message '(" ") point))
-    (loop while point do
+    (loop while (and point
+                     (< point (1- (length message)))) do
          (incf point)
          (if (char= #\: (aref message point))
              (progn
@@ -87,10 +89,12 @@
   (when (if timeout
             (wait-for-input socket :timeout timeout)
             (wait-for-input socket))
-    (let ((raw))
+    (let ((raw)
+          (message))
       (setf raw (read-line (socket-stream socket)))
       (setf raw (subseq raw 0 (1- (length raw))))
-      (parse-message raw))))
+      (setf message (parse-message raw))
+      (setf (received message) (get-universal-time)))))
 
 (defun prefix->string (prefix)
   (let ((elems))
