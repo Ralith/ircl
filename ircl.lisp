@@ -1,16 +1,19 @@
 (in-package :ircl)
 
+;;; TODO: Specialize for server/user forms.
 (defclass prefix ()
   ((nick :initarg :nick :accessor nick)
    (username :initarg :username :accessor username)
    (host :initarg :host :accessor host)))
 
 (defclass message ()
-  ((received :initarg :received :accessor received)
-   (prefix :initarg :prefix :accessor prefix)
-   (command :initarg :command :accessor command)
+  ((command :initarg :command :accessor command)
    (parameters :initarg :parameters :accessor parameters
                :initform nil)))
+
+(defclass received-message (message)
+  ((received :initform (get-universal-time) :reader received)
+   (prefix :initarg :prefix :accessor prefix)))
 
 (defun make-message (command &rest parameters)
   (make-instance 'message :command command :parameters parameters))
@@ -67,7 +70,7 @@
 
 (defun parse-message (message)
   (let ((point 0)
-        (result (make-instance 'message)))
+        (result (make-instance 'received-message)))
     (when (char= #\: (aref message 0))
       (incf point)
       (setf (prefix result) (parse-prefix (parse-until message '(" ") point)))
@@ -89,12 +92,10 @@
   (when (if timeout
             (wait-for-input socket :timeout timeout)
             (wait-for-input socket))
-    (let ((raw)
-          (message))
+    (let ((raw))
       (setf raw (read-line (socket-stream socket)))
       (setf raw (subseq raw 0 (1- (length raw))))
-      (setf message (parse-message raw))
-      (setf (received message) (get-universal-time)))))
+      (parse-message raw))))
 
 (defun prefix->string (prefix)
   (let ((elems))
@@ -111,7 +112,7 @@
           (push (nick prefix) elems)))
     (apply #'concatenate 'string elems)))
 
-(defun message->string (message &optional (include-prefix t))
+(defun message->string (message)
   (let ((params (copy-list (parameters message))))
     (setf params (mapcar (lambda (x)
                            (when (> (length x) 0)
@@ -121,9 +122,8 @@
                                  (concatenate 'string " " x))))
                          params))
     (apply #'concatenate 'string
-           (if (and include-prefix (slot-boundp message 'prefix))
-               (concatenate 'string ":" (prefix->string (prefix message)) " ")
-               "")
+           (when (typep message received-message)
+               (concatenate 'string ":" (prefix->string (prefix message)) " "))
            (command message)
            params)))
 
