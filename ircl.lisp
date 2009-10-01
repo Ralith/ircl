@@ -1,10 +1,11 @@
 (in-package :ircl)
 
-;;; TODO: Specialize for server/user forms.
-(defclass prefix ()
+(defclass server-prefix ()
+  ((host :initarg :host :accessor host)))
+
+(defclass user-prefix (server-prefix)
   ((nick :initarg :nick :accessor nick)
-   (username :initarg :username :accessor username)
-   (host :initarg :host :accessor host)))
+   (username :initarg :username :accessor username)))
 
 (defclass message ()
   ((command :initarg :command :accessor command)
@@ -51,30 +52,36 @@
 
 (defun parse-prefix (string)
   (let ((point 0)
-        (result (make-instance 'prefix)))
+        (nick) (username) (host))
     (cond
       ((position #\! string)
-       (setf (nick result) (parse-until string '("!") point))
        (incf point)
+       (setf nick (parse-until string '("!") point))
        (if (position #\@ string)
            (progn
-             (setf (username result) (parse-until string '("@") point))
-             (setf (host result) (subseq string (1+ point))))
-           (setf (username result) (subseq string point))))
+             (setf username (parse-until string '("@") point))
+             (setf host (subseq string (1+ point))))
+           (setf username (subseq string point))))
       ((position #\@ string)
-       (setf (nick result) (parse-until string '("@") point))
-       (setf (host result) (subseq string (1+ point))))
+       (incf point)
+       (setf nick (parse-until string '("@") point))
+       (setf host (subseq string (1+ point))))
       (t
-       (setf (host result) string)))
-    result))
+       (setf host string)))
+    (if nick
+        (make-instance 'user-prefix
+                       :nick nick :username username :host host)
+        (make-instance 'server-prefix :host host))))
 
 (defun parse-message (message)
   (let ((point 0)
         (result (make-instance 'received-message)))
-    (when (char= #\: (aref message 0))
-      (incf point)
-      (setf (prefix result) (parse-prefix (parse-until message '(" ") point)))
-      (incf point))
+    (if (char= #\: (aref message 0))
+      (progn
+        (incf point)
+        (setf (prefix result) (parse-prefix (parse-until message '(" ") point)))
+        (incf point))
+      (setf (prefix result) nil))
     (setf (command result) (parse-until message '(" ") point))
     (loop while (and point
                      (< point (1- (length message)))) do
@@ -122,13 +129,13 @@
                                  (concatenate 'string " " x))))
                          params))
     (apply #'concatenate 'string
-           (when (typep message received-message)
+           (when (typep message 'received-message)
                (concatenate 'string ":" (prefix->string (prefix message)) " "))
            (command message)
            params)))
 
 (defun send-message (socket message)
-  (send-raw socket (concatenate 'string (message->string message nil)))
+  (send-raw socket (concatenate 'string (message->string message)))
   (force-output (socket-stream socket)))
 
 (defun send-raw (socket string)
