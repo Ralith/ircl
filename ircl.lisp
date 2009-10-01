@@ -1,9 +1,9 @@
 (in-package :ircl)
 
-(defclass server-prefix ()
+(defclass server ()
   ((host :initarg :host :accessor host)))
 
-(defclass user-prefix (server-prefix)
+(defclass user (server)
   ((nick :initarg :nick :accessor nick)
    (username :initarg :username :accessor username)))
 
@@ -55,7 +55,7 @@
        ,output)))
 
 (defun parse-prefix (string)
-  "Parses IRC prefix STRING into a USER-PREFIX or a SERVER-PREFIX.  STRING must omit the leading colon."
+  "Parses IRC prefix STRING into a USER or a SERVER.  STRING must omit the leading colon."
   (let ((point 0)
         (nick) (username) (host))
     (cond
@@ -73,9 +73,9 @@
       (t
        (setf host string)))
     (if nick
-        (make-instance 'user-prefix
+        (make-instance 'user
                        :nick nick :username username :host host)
-        (make-instance 'server-prefix :host host))))
+        (make-instance 'server :host host))))
 
 (defun parse-message (string)
   "Parses raw IRC message STRING into a RECEIVED-MESSAGE.  Should only be used for messages received directly from the server, at the time that they are received."
@@ -111,8 +111,8 @@
       (parse-message raw))))
 
 (defun prefix->string (prefix)
-  "Converts PREFIX of type USER-PREFIX or SERVER-PREFIX into the IRC protocol standard string representation."
-  (if (typep prefix 'user-prefix)
+  "Converts PREFIX of type USER or SERVER into the IRC protocol standard string representation."
+  (if (typep prefix 'user)
       (format nil "~a!~a@~a"
               (nick prefix) (username prefix) (host prefix))
       (host prefix)))
