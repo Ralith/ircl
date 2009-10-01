@@ -55,15 +55,14 @@
         (nick) (username) (host))
     (cond
       ((position #\! string)
-       (incf point)
        (setf nick (parse-until string '("!") point))
        (if (position #\@ string)
            (progn
+             (incf point)
              (setf username (parse-until string '("@") point))
              (setf host (subseq string (1+ point))))
            (setf username (subseq string point))))
       ((position #\@ string)
-       (incf point)
        (setf nick (parse-until string '("@") point))
        (setf host (subseq string (1+ point))))
       (t
