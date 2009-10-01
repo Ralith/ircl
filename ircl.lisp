@@ -128,7 +128,8 @@
                                  (concatenate 'string " " x))))
                          params))
     (apply #'concatenate 'string
-           (when (typep message 'received-message)
+           (when (and (typep message 'received-message)
+                      (prefix message))
                (concatenate 'string ":" (prefix->string (prefix message)) " "))
            (command message)
            params)))
