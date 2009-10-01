@@ -17,9 +17,11 @@
    (prefix :initarg :prefix :accessor prefix)))
 
 (defun make-message (command &rest parameters)
+  "Returns a new MESSAGE the given COMMAND and PARAMETERS."
   (make-instance 'message :command command :parameters parameters))
 
 (defun connect (host &key (port 6667) ssl)
+  "Establish a connection to the IRC server given."
   (if ssl
       (error "SSL support is TODO")
       (socket-connect host port)))
@@ -29,6 +31,7 @@
 
 ;; nil terminator is end-of-string
 (defun take-until (terminators string)
+  "Returns a subsequence of STRING ending at one of the strings in TERMINATORS.  A NIL value in TERMINATORS matches the end of the string."
   (loop for point from 0 to (1- (length string)) do
        (mapcar (lambda (x)
                  (if (null x)
@@ -41,6 +44,7 @@
                terminators)))
 
 (defmacro parse-until (string terminators point)
+  "Collect from string starting at POINT until reaching a string in TERMINATORS, returning that sequence and setting POINT to the first point not returned in STRING, or NIL if a subsequence including the end of the string has been returned.  A NIL value in TERMINATORS matches the end of the string."
   (let ((output (gensym))
         (offset (gensym)))
     `(multiple-value-bind (,output ,offset)
