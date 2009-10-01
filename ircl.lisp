@@ -51,6 +51,7 @@
        ,output)))
 
 (defun parse-prefix (string)
+  "Parses IRC prefix STRING into a USER-PREFIX or a SERVER-PREFIX.  STRING must omit the leading colon."
   (let ((point 0)
         (nick) (username) (host))
     (cond
@@ -72,29 +73,31 @@
                        :nick nick :username username :host host)
         (make-instance 'server-prefix :host host))))
 
-(defun parse-message (message)
+(defun parse-message (string)
+  "Parses raw IRC message STRING into a RECEIVED-MESSAGE.  Should only be used for messages received directly from the server, at the time that they are received."
   (let ((point 0)
         (result (make-instance 'received-message)))
-    (if (char= #\: (aref message 0))
+    (if (char= #\: (aref string 0))
       (progn
         (incf point)
-        (setf (prefix result) (parse-prefix (parse-until message '(" ") point)))
+        (setf (prefix result) (parse-prefix (parse-until string '(" ") point)))
         (incf point))
       (setf (prefix result) nil))
-    (setf (command result) (parse-until message '(" ") point))
+    (setf (command result) (parse-until string '(" ") point))
     (loop while (and point
-                     (< point (1- (length message)))) do
+                     (< point (1- (length string)))) do
          (incf point)
-         (if (char= #\: (aref message point))
+         (if (char= #\: (aref string point))
              (progn
-               (push (subseq message (1+ point)) (parameters result))
+               (push (subseq string (1+ point)) (parameters result))
                (return))
-             (push (parse-until message '(" " nil) point) (parameters result))))
+             (push (parse-until string '(" " nil) point) (parameters result))))
     (setf (parameters result) (nreverse (parameters result)))
     result))
 
 ;; Blocks until a complete message is available, then returns parsed form
 (defun get-message (socket &optional timeout)
+  "Reads a RECEIVED-MESSAGE from SOCKET, blocking until a full message can be read or optionally until TIMEOUT expires."
   (when (if timeout
             (wait-for-input socket :timeout timeout)
             (wait-for-input socket))
@@ -104,21 +107,14 @@
       (parse-message raw))))
 
 (defun prefix->string (prefix)
-  (let ((elems))
-    (when (slot-boundp prefix 'host)
-      (push (host prefix) elems))
-    (if (slot-boundp prefix 'username)
-        (progn (push "@" elems)
-               (push (username prefix) elems)
-               (when (slot-boundp prefix 'nick)
-                 (push "!" elems)
-                 (push (nick prefix) elems)))
-        (when (slot-boundp prefix 'nick)
-          (push "@" elems)
-          (push (nick prefix) elems)))
-    (apply #'concatenate 'string elems)))
+  "Converts PREFIX of type USER-PREFIX or SERVER-PREFIX into the IRC protocol standard string representation."
+  (if (typep prefix 'user-prefix)
+      (format nil "~a!~a@~a"
+              (nick prefix) (username prefix) (host prefix))
+      (host prefix)))
 
 (defun message->string (message)
+  "Converts MESSAGE to IRC protocol string representation."
   (let ((params (copy-list (parameters message))))
     (setf params (mapcar (lambda (x)
                            (when (> (length x) 0)
@@ -134,9 +130,11 @@
            params)))
 
 (defun send-message (socket message)
+  "Sends IRC MESSAGE over SOCKET."
   (send-raw socket (concatenate 'string (message->string message)))
   (force-output (socket-stream socket)))
 
 (defun send-raw (socket string)
+  "Sends raw IRC protocol STRING over SOCKET."
   (format (socket-stream socket) "~a~a~a" string (code-char 13) (code-char 10))
   (force-output (socket-stream socket)))
