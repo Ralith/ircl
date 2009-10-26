@@ -21,7 +21,7 @@
   (make-instance 'message :command command :parameters parameters))
 
 (defun connect (host &key (port 6667) ssl)
-  "Establish a connection to the IRC server given."
+  "Establish a connection to the IRC server at HOST."
   (if ssl
       (error "SSL support is TODO")
       (socket-connect host port)))
@@ -29,7 +29,6 @@
 (defun disconnect (socket)
   (socket-close socket))
 
-;; nil terminator is end-of-string
 (defun take-until (terminators string)
   "Returns a subsequence of STRING ending at one of the strings in TERMINATORS.  A NIL value in TERMINATORS matches the end of the string."
   (loop for point from 0 to (1- (length string)) do
@@ -99,15 +98,21 @@
     (setf (parameters result) (nreverse (parameters result)))
     result))
 
-;; Blocks until a complete message is available, then returns parsed form
 (defun get-message (socket &optional timeout)
   "Reads a RECEIVED-MESSAGE from SOCKET, blocking until a full message can be read or optionally until TIMEOUT expires."
   (when (if timeout
             (wait-for-input socket :timeout timeout)
             (wait-for-input socket))
     (let ((raw))
-      (setf raw (read-line (socket-stream socket)))
-      (setf raw (subseq raw 0 (1- (length raw))))
+      (loop for char = (handler-case
+                           (read-char (socket-stream socket))
+                         (stream-error () #\REPLACEMENT_CHARACTER))
+           do
+           (setf raw (concatenate 'string raw (string char)))
+           (when (and (char= #\Linefeed char)
+                      (char= #\Return (aref raw (- (length raw) 2))))
+             (return)))
+      (setf raw (subseq raw 0 (- (length raw) 2)))
       (parse-message raw))))
 
 (defun prefix->string (prefix)
