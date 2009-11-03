@@ -103,17 +103,8 @@
   (when (if timeout
             (wait-for-input socket :timeout timeout)
             (wait-for-input socket))
-    (let ((raw))
-      (loop for char = (handler-case
-                           (read-char (socket-stream socket))
-                         (stream-error () #\REPLACEMENT_CHARACTER))
-           do
-           (setf raw (concatenate 'string raw (string char)))
-           (when (and (char= #\Linefeed char)
-                      (char= #\Return (aref raw (- (length raw) 2))))
-             (return)))
-      (setf raw (subseq raw 0 (- (length raw) 2)))
-      (parse-message raw))))
+    (let ((raw (read-line (socket-stream socket))))
+      (parse-message (subseq raw 0 (1- (length raw)))))))
 
 (defun prefix->string (prefix)
   "Converts PREFIX of type USER or SERVER into the IRC protocol standard string representation."
