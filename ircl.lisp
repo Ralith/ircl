@@ -26,8 +26,8 @@
       (error "SSL support is TODO")
       (socket-connect host port)))
 
-(defun disconnect (socket)
-  (socket-close socket))
+(defun disconnect (connection)
+  (socket-close connection))
 
 (defun take-until (terminators string)
   "Returns a subsequence of STRING ending at one of the strings in TERMINATORS.  A NIL value in TERMINATORS matches the end of the string."
@@ -98,12 +98,12 @@
     (setf (parameters result) (nreverse (parameters result)))
     result))
 
-(defun get-message (socket &optional timeout)
+(defun get-message (connection &optional timeout)
   "Reads a RECEIVED-MESSAGE from SOCKET, blocking until a full message can be read or optionally until TIMEOUT expires."
   (when (if timeout
-            (wait-for-input socket :timeout timeout)
-            (wait-for-input socket))
-    (let ((raw (read-line (socket-stream socket))))
+            (wait-for-input connection :timeout timeout)
+            (wait-for-input connection))
+    (let ((raw (read-line (socket-stream connection))))
       (parse-message (subseq raw 0 (1- (length raw)))))))
 
 (defun prefix->string (prefix)
@@ -115,27 +115,24 @@
 
 (defun message->string (message)
   "Converts MESSAGE to IRC protocol string representation."
-  (let ((params (copy-list (parameters message))))
-    (setf params (mapcar (lambda (x)
-                           (when (> (length x) 0)
-                             (if (or (position #\Space x)
-                                     (char= #\: (aref x 0)))
-                                 (concatenate 'string " :" x)
-                                 (concatenate 'string " " x))))
-                         params))
-    (apply #'concatenate 'string
-           (when (and (typep message 'received-message)
-                      (prefix message))
-               (concatenate 'string ":" (prefix->string (prefix message)) " "))
-           (command message)
-           params)))
+  (apply #'concatenate 'string
+         (when (and (typep message 'received-message)
+                    (prefix message))
+           (concatenate 'string ":" (prefix->string (prefix message)) " "))
+         (command message)
+         (mapcar (lambda (x)
+                   (when (> (length x) 0)
+                     (if (or (position #\Space x)
+                             (char= #\: (aref x 0)))
+                         (concatenate 'string " :" x)
+                         (concatenate 'string " " x))))
+                 (parameters message))))
 
-(defun send-message (socket message)
-  "Sends IRC MESSAGE over SOCKET."
-  (send-raw socket (concatenate 'string (message->string message)))
-  (force-output (socket-stream socket)))
+(defun send-message (connection message)
+  "Sends IRC MESSAGE over CONNECTION."
+  (send-raw connection (concatenate 'string (message->string message))))
 
-(defun send-raw (socket string)
+(defun send-raw (connection string)
   "Sends raw IRC protocol STRING over SOCKET."
-  (format (socket-stream socket) "~a~a~a" string (code-char 13) (code-char 10))
-  (force-output (socket-stream socket)))
+  (format (socket-stream connection) "~a~a~a" string (code-char 13) (code-char 10))
+  (force-output (socket-stream connection)))
