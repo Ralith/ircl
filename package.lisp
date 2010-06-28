@@ -6,4 +6,4 @@
            nick username host
            connect disconnect
            make-message parse-message message->string prefix->string
-           get-message send-message send-raw))
+           check-for-message get-message send-message send-raw))
