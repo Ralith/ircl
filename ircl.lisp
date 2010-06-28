@@ -1,5 +1,7 @@
 (in-package :ircl)
 
+(defvar *buffers* (make-hash-table :test 'equal))
+
 (defclass server ()
   ((host :initarg :host :accessor host)))
 
@@ -22,9 +24,10 @@
 
 (defun connect (host &key (port 6667) ssl)
   "Establish a connection to the IRC server at HOST."
-  (if ssl
-      (error "SSL support is TODO")
-      (socket-connect host port)))
+  (let ((connection (if ssl
+                        (error "SSL support is TODO")
+                        (socket-connect host port))))
+    (setf (gethash connection *buffers*) "")))
 
 (defun disconnect (connection)
   (socket-close connection))
@@ -98,13 +101,27 @@
     (setf (parameters result) (nreverse (parameters result)))
     result))
 
-(defun get-message (connection &optional timeout)
+(defun check-for-message (connection &aux (buffer (gethash connection *buffers*)))
+  "Checks to see if a message can be read from CONNECTION.  Not threadsafe for multiple threads sharing one connection.
+It is strongly recommended that get-message be used with a zero timeout instead when possible."
+  (loop while (listen connection)
+        for char = (read-char connection)
+        do (setf buffer (concatenate 'string (gethash connection *buffers*) char))
+           (when (char= (aref char 0) #\Newline)
+             (return)))
+  (char= (aref buffer (1- (length buffer))) #\Newline))
+
+(defun get-message (connection &optional timeout &aux (buffer (gethash connection *buffers*)))
   "Reads a RECEIVED-MESSAGE from SOCKET, blocking until a full message can be read or optionally until TIMEOUT expires."
-  (when (if timeout
-            (wait-for-input connection :timeout timeout)
-            (wait-for-input connection))
-    (let ((raw (read-line (socket-stream connection))))
-      (parse-message (subseq raw 0 (1- (length raw)))))))
+  (if (and (length buffer) (char= (aref buffer (1- (length buffer))) #\Newline))
+      (progn (parse-message buffer)
+             (setf buffer ""))
+      (when (if timeout
+                (wait-for-input connection :timeout timeout)
+                (wait-for-input connection))
+        (let ((raw (read-line (socket-stream connection))))
+          (parse-message (concatenate 'string buffer (subseq raw 0 (1- (length raw)))))
+          (setf buffer "")))))
 
 (defun prefix->string (prefix)
   "Converts PREFIX of type USER or SERVER into the IRC protocol standard string representation."
